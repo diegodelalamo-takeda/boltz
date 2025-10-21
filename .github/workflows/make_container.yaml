@@ -10,7 +10,7 @@ permissions:
 env:
   AWS_REGION: us-east-1
   ECR_ACCOUNT_ID: "056860164379"
-  ECR_REPOSITORY: "boltz2" # change if you use a different repo name
+  ECR_REPOSITORY: "boltz2"
 
 jobs:
   build:
@@ -28,49 +28,48 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Buildx (docker-container driver)
-        id: buildx
         uses: docker/setup-buildx-action@v3
         with:
           install: true
           driver: docker-container
 
-      # --- AWS auth (using access keys in repo secrets) ---
+      # Authenticate the job to AWS using your short-lived credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Create the repo if it doesn't exist (idempotent)
+      # Ensure the ECR repo exists (safe to run every time)
       - name: Ensure ECR repository exists
         run: |
           aws ecr describe-repositories --repository-names "${{ env.ECR_REPOSITORY }}" >/dev/null 2>&1 || \
           aws ecr create-repository --repository-name "${{ env.ECR_REPOSITORY }}" >/dev/null
-          echo "Repository ensured: ${{ env.ECR_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}"
 
-      # Log in to ECR and capture registry URL
+      # Log Docker in to ECR and expose the registry URL as an output
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Generate tags (latest + sha)
+      # Generate image tags (latest, sha-<shortsha>) & OCI labels
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
           tags: |
             type=raw,value=latest
             type=sha
 
-      - name: Build and push (to ECR)
+      # Build and push to ECR
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          platforms: linux/amd64   # GPU instances on AWS are x86_64; arm64 not needed for CUDA
+          platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
