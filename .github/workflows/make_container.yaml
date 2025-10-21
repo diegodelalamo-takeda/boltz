@@ -13,6 +13,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Free up disk space
+        run: |
+          echo "Before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache || true
+          sudo apt-get clean
+          echo "After cleanup:"
+          df -h
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -47,3 +56,13 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+          load: false
+          # Use temporary directory with more free space
+          builder: default
+          sbom: false
+          provenance: false
+
+      - name: Show disk usage after build
+        run: df -h
