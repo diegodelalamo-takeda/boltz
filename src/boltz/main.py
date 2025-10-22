@@ -1223,7 +1223,8 @@ def predict(  # noqa: C901, PLR0915, PLR0912
             if isinstance(devices, list):
                 devices = devices[: max(1, len(filtered_manifest.records))]
             else:
-                devices = max(1, min(len(filtered_manifest.records), devices))
+                # devices = max(1, min(len(filtered_manifest.records), devices))
+                devices = [torch.cuda.device_count() - 1]
 
     # Set up model parameters
     if model == "boltz2":
